@@ -1,0 +1,566 @@
+<?xml version="1.0"?>
+<robot name="quadruped_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================================================
+       QUADRUPED ROBOT - RoboDog
+       4-legged servo-based robot with:
+         - IMU sensor on base_link
+         - Camera sensor in head
+         - 3-DOF per leg (hip, thigh, knee)
+         - Tail link
+       ============================================================ -->
+
+  <!-- ==================== CONSTANTS ==================== -->
+
+  <!-- Body dimensions -->
+  <xacro:property name="body_length"    value="0.20"/>
+  <xacro:property name="body_width"     value="0.12"/>
+  <xacro:property name="body_height"    value="0.06"/>
+  <xacro:property name="body_mass"      value="2.5"/>
+
+  <!-- Head dimensions -->
+  <xacro:property name="head_radius"    value="0.045"/>
+  <xacro:property name="head_mass"      value="0.10"/>
+
+  <!-- Tail dimensions -->
+  <xacro:property name="tail_length"    value="0.04"/>
+  <xacro:property name="tail_radius"    value="0.008"/>
+  <xacro:property name="tail_mass"      value="0.05"/>
+
+  <!-- Hip link -->
+  <xacro:property name="hip_length"     value="0.045"/>
+  <xacro:property name="hip_radius"     value="0.012"/>
+  <xacro:property name="hip_mass"       value="0.15"/>
+
+  <!-- Thigh link -->
+  <xacro:property name="thigh_length"   value="0.09"/>
+  <xacro:property name="thigh_radius"   value="0.011"/>
+  <xacro:property name="thigh_mass"     value="0.20"/>
+
+  <!-- Calf link -->
+  <xacro:property name="calf_length"    value="0.09"/>
+  <xacro:property name="calf_radius"    value="0.009"/>
+  <xacro:property name="calf_mass"      value="0.12"/>
+
+  <!-- Foot link -->
+  <xacro:property name="foot_radius"    value="0.014"/>
+  <xacro:property name="foot_mass"      value="0.04"/>
+
+  <!-- Spawn height above ground -->
+  <xacro:property name="spawn_height"   value="0.22"/>
+
+  <!-- Leg offsets on body -->
+  <xacro:property name="leg_x_offset" value="${body_length/2 - 0.3*hip_length}"/>
+  <xacro:property name="leg_y_offset" value="${body_width/2 + 0.008}"/>
+  <!-- ==================== INERTIA MACROS ==================== -->
+
+  <xacro:macro name="inertia_box" params="m x y z">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${m*(y*y+z*z)/12}" ixy="0" ixz="0"
+        iyy="${m*(x*x+z*z)/12}" iyz="0"
+        izz="${m*(x*x+y*y)/12}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="inertia_cylinder" params="m r l">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${m*(3*r*r+l*l)/12}" ixy="0" ixz="0"
+        iyy="${m*(3*r*r+l*l)/12}" iyz="0"
+        izz="${m*r*r/2}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="inertia_sphere" params="m r">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${2*m*r*r/5}" ixy="0" ixz="0"
+        iyy="${2*m*r*r/5}" iyz="0"
+        izz="${2*m*r*r/5}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- ==================== LEG MACRO ==================== -->
+  <!--
+    prefix  : fl / fr / rl / rr
+    x_sign  :  1 = front,  -1 = rear
+    y_sign  :  1 = left,   -1 = right
+  -->
+  <xacro:macro name="leg" params="prefix x_sign y_sign">
+
+    <!-- HIP LINK -->
+    <link name="${prefix}_hip">
+    <xacro:inertia_cylinder m="${hip_mass}" r="${hip_radius}" l="${hip_length}"/>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${hip_radius}" length="${hip_length}"/>
+        </geometry>
+        <material name="dark_gray">
+          <color rgba="0.2 0.2 0.2 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${hip_radius}" length="${hip_length}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- hip joint: abduction/adduction (rotation around Z-axis of body) -->
+    <joint name="${prefix}_hip_joint" type="revolute">
+      <parent link="base_link"/>
+      <child  link="${prefix}_hip"/>
+      <origin xyz="${x_sign*leg_x_offset} ${y_sign*leg_y_offset} 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="-0.4" upper="0.4" effort="30" velocity="3.0"/>
+      <dynamics damping="0.5" friction="0.2"/>
+    </joint>
+
+    <gazebo reference="${prefix}_hip">
+      <material>Gazebo/DarkGray</material>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+    </gazebo>
+ 
+    <!-- THIGH LINK -->
+    <link name="${prefix}_thigh">
+     <xacro:inertia_cylinder m="${thigh_mass}" r="0.02" l="${thigh_length}"/>
+      <visual>
+        <origin xyz="0 0 ${-thigh_length/2 + hip_radius}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.015" length="${thigh_length}"/>      
+        </geometry>
+        <material name="dark_metal">
+          <color rgba="0.5 0.5 0.55 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-thigh_length/2 + hip_radius}" rpy="0 0 0"/>
+        <geometry>
+         <cylinder radius="0.015" length="${thigh_length}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- thigh joint: forward/backward swing -->
+    <joint name="${prefix}_thigh_joint" type="revolute">
+      <parent link="${prefix}_hip"/>
+      <child  link="${prefix}_thigh"/>
+      <origin xyz="0 ${y_sign*hip_length/2} 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="-0.6" upper="0.3" effort="40" velocity="3.0"/>
+      <dynamics damping="0.5" friction="0.2"/>
+    </joint>
+
+    <gazebo reference="${prefix}_thigh">
+      <material>Gazebo/Orange</material>
+      <mu1>0.8</mu1>
+      <mu2>0.8</mu2>
+    </gazebo>
+
+    <!-- CALF LINK -->
+    <link name="${prefix}_calf">
+      <xacro:inertia_cylinder m="${calf_mass}" r="0.015" l="${calf_length}"/>
+      <visual>
+        <origin xyz="0 0 ${-calf_length/2}" rpy="0 0 0"/>
+        <geometry>
+           <cylinder radius="0.012" length="${calf_length}"/>
+        </geometry>
+        <material name="silver">
+          <color rgba="0.85 0.85 0.9 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-calf_length/2}" rpy="0 0 0"/>
+        <geometry>
+           <cylinder radius="0.012" length="${calf_length}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- knee joint: bending -->
+    <joint name="${prefix}_knee_joint" type="revolute">
+      <parent link="${prefix}_thigh"/>
+      <child  link="${prefix}_calf"/>
+      <origin xyz="0 0 ${-(thigh_length - thigh_radius) + 0.002}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="-1.0" upper="0.2" effort="40" velocity="3.0"/>
+      <dynamics damping="0.5" friction="0.2"/>
+    </joint>
+
+    <gazebo reference="${prefix}_calf">
+      <material>Gazebo/Gray</material>
+      <mu1>0.8</mu1>
+      <mu2>0.8</mu2>
+    </gazebo>
+
+    <!-- FOOT LINK -->
+    <link name="${prefix}_foot">
+      <xacro:inertia_sphere m="${foot_mass}" r="${foot_radius}"/>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="0.02"/>
+        </geometry>
+        <material name="black">
+          <color rgba="0.05 0.05 0.05 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="0.02"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- foot joint: fixed to calf (foot sphere at bottom) -->
+    <joint name="${prefix}_foot_joint" type="fixed">
+      <parent link="${prefix}_calf"/>
+      <child  link="${prefix}_foot"/>
+      <origin xyz="0 0 ${-calf_length}" rpy="0 0 0"/>
+    </joint>
+
+    <gazebo reference="${prefix}_foot">
+      <material>Gazebo/Black</material>
+      <!-- High friction rubber foot -->
+      <mu1>1.5</mu1>
+      <mu2>1.5</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+      <maxVel>1.0</maxVel>
+    </gazebo>
+
+  </xacro:macro>
+
+  <!-- ==================== BASE LINK ==================== -->
+  <link name="base_link">
+    <xacro:inertia_box m="${body_mass}" x="${body_length}" y="${body_width}" z="${body_height}"/>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>  
+    <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+      <material name="body_gray">
+        <color rgba="0.65 0.65 0.7 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+    </collision>
+  </link>
+
+    <link name="neck_link">
+   <inertial>
+  <mass value="0.05"/>
+  <inertia ixx="0.0001" iyy="0.0001" izz="0.0001"
+           ixy="0" ixz="0" iyz="0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <cylinder radius="0.015" length="0.03"/>
+    </geometry>
+    <material name="neck_metal">
+  <color rgba="0.5 0.5 0.55 1"/>
+   </material>
+  </visual>
+
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <cylinder radius="0.015" length="0.03"/>
+    </geometry>
+  </collision>
+  </link>
+
+   <joint name="neck_joint" type="fixed">
+  <parent link="base_link"/>
+  <child link="neck_link"/>
+  <origin xyz="${body_length/2} 0 ${body_height/2}" rpy="0 0 0"/>
+  </joint>
+
+
+  <gazebo reference="base_link">
+    <material>Gazebo/Blue</material>
+    <mu1>0.6</mu1>
+    <mu2>0.6</mu2>	
+  </gazebo>
+
+  <!-- ==================== HEAD LINK ==================== -->
+  <link name="head_link">
+  <visual>
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+  <geometry>
+    <box size="0.05 0.08 0.04"/>
+  </geometry>
+  <material name="head_gray">
+    <color rgba="0.55 0.55 0.6 1"/>
+  </material>
+</visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <box size="0.05 0.08 0.04"/>
+    </geometry>
+  </collision>
+ </link>
+
+  <joint name="head_joint" type="revolute">
+    <parent link="neck_link"/>
+    <child  link="head_link"/>
+  <origin xyz="0 0 0.03" rpy="0 0 0"/>
+  <axis xyz="0 0 1"/>
+  <limit lower="-1.57" upper="1.57" effort="10" velocity="1.0"/>
+  </joint>
+
+  <gazebo reference="head_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <!-- Camera visual marker inside head -->
+  <link name="camera_link">
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0"
+               iyy="0.0001" iyz="0"
+               izz="0.0001"/>
+    </inertial>
+   <visual>
+  <!-- Camera body -->
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+  <geometry>
+    <box size="0.015 0.03 0.015"/>
+  </geometry>
+  <material name="camera_black">
+    <color rgba="0.1 0.1 0.1 1"/>
+  </material>
+</visual>
+
+<!-- Lens -->
+<visual>
+  <origin xyz="0.012 0 0" rpy="0 1.57 0"/>
+  <geometry>
+    <cylinder length="0.008" radius="0.005"/>
+  </geometry>
+  <material name="lens_glass">
+    <color rgba="0.15 0.15 0.2 1"/>
+  </material>
+</visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="head_link"/>
+    <child  link="camera_link"/>
+  <origin xyz="0.03 0 0.015" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== TAIL LINK ==================== -->
+  <link name="tail_link">
+    <xacro:inertia_cylinder m="${tail_mass}" r="${tail_radius}" l="${tail_length}"/>
+    <visual>
+      <origin xyz="${-tail_length/2} 0 0" rpy="0 ${pi/2} 0"/>
+      <geometry>
+        <cylinder radius="${tail_radius}" length="${tail_length}"/>
+      </geometry>
+      <material name="tail_color">
+        <color rgba="0.6 0.6 0.65 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="${-tail_length/2} 0 0" rpy="0 ${pi/2} 0"/>
+      <geometry>
+        <cylinder radius="${tail_radius}" length="${tail_length}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tail_joint" type="revolute">
+    <parent link="base_link"/>
+    <child  link="tail_link"/>
+    <origin xyz="${-body_length/2} 0 ${body_height/4}" rpy="0.3 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.5" upper="0.5" effort="5" velocity="2.0"/>
+    <dynamics damping="0.3" friction="0.1"/>
+  </joint>
+
+  <gazebo reference="tail_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <!-- ==================== IMU SENSOR ==================== -->
+  <link name="imu_link">
+    <inertial>
+      <mass value="0.005"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0"
+               iyy="0.00001" iyz="0"
+               izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <box size="0.02 0.02 0.005"/>
+      </geometry>
+      <material name="green_pcb">
+        <color rgba="0.0 0.6 0.1 1"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child  link="imu_link"/>
+    <origin xyz="0 0 ${body_height/2}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== INSTANTIATE LEGS ==================== -->
+  <xacro:leg prefix="front_left"  x_sign=" 1" y_sign=" 1"/>
+  <xacro:leg prefix="front_right" x_sign=" 1" y_sign="-1"/>
+  <xacro:leg prefix="rear_left"   x_sign="-1" y_sign=" 1"/>
+  <xacro:leg prefix="rear_right"  x_sign="-1" y_sign="-1"/>
+
+  <!-- ==================== GAZEBO PLUGINS ==================== -->
+
+  <!-- IMU Plugin -->
+  <gazebo reference="imu_link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <visualize>false</visualize>
+      <topic>/imu/data</topic>
+      <imu>
+        <angular_velocity>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.005</stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.005</stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.005</stddev></noise></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.01</stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.01</stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.01</stddev></noise></z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
+  </gazebo>
+
+  <!-- Camera Plugin -->
+  <gazebo reference="camera_link">
+    <sensor name="head_camera" type="camera">
+      <always_on>true</always_on>
+      <update_rate>30</update_rate>
+      <visualize>true</visualize>
+      <camera name="head_camera">
+        <horizontal_fov>1.3962634</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.02</near>
+          <far>300</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.007</stddev>
+        </noise>
+      </camera>
+    </sensor>
+  </gazebo>
+
+
+<gazebo>
+   <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+   <parameters>/home/krish-pc/ros2_ws/src/quadruped_robot/config/controllers.yaml</parameters>
+  </plugin>
+</gazebo>
+
+
+<ros2_control name="QuadrupedSystem" type="system">
+  <hardware>
+    <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+  </hardware>
+
+  <!-- FRONT LEFT -->
+  <joint name="front_left_hip_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="front_left_thigh_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="front_left_knee_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <!-- FRONT RIGHT -->
+  <joint name="front_right_hip_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="front_right_thigh_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="front_right_knee_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <!-- REAR LEFT -->
+  <joint name="rear_left_hip_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="rear_left_thigh_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="rear_left_knee_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <!-- REAR RIGHT -->
+  <joint name="rear_right_hip_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="rear_right_thigh_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="rear_right_knee_joint">
+    <command_interface name="position"/>
+    <state_interface name="position"/>
+  </joint>
+
+</ros2_control>    
+
+</robot>
